@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Datasets — Interactive Satellite Data Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F5F7;
+    --surface:#FFFFFF;
+    --ink:#12161C;
+    --muted:#5B6472;
+    --hair:#E2E6EA;
+
+    --blue:#3D6FE0;      --blue-pale:#E8EEFC;   --blue-deep:#2A4FB0;
+    --amber:#C98A16;     --amber-pale:#FBF1DC;
+    --green:#238754;     --green-pale:#E4F5EA;
+    --violet:#7C4FE0;    --violet-pale:#EFE9FD;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',sans-serif; line-height:1.6; -webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+
+  /* ---------- HERO : solid blue, white type ---------- */
+  .hero{
+    position:relative;
+    padding:30px 24px;
+    overflow:hidden;
+    background:linear-gradient(155deg, var(--blue) 0%, var(--blue-deep) 100%);
+  }
+  .grid-overlay{
+    position:absolute; inset:0; pointer-events:none; opacity:.18;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+    background-size:42px 42px;
+    mask-image:radial-gradient(ellipse 700px 220px at 80% 30%, black, transparent 75%);
+  }
+  .scanlines{
+    position:absolute; inset:0; pointer-events:none;
+    background-image:repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 5px);
+  }
+
+  .hero-inner{
+    position:relative; max-width:1360px; margin:0 auto; z-index:2;
+    display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  }
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:clamp(22px,3vw,34px); line-height:1.1; margin:0; letter-spacing:-0.01em; font-weight:700;
+    color:#fff;
+  }
+  .open-tab-btn{
+    display:inline-flex; align-items:center; gap:7px;
+    background:#fff; color:var(--blue-deep);
+    text-decoration:none; font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px; font-weight:600;
+    padding:10px 18px; border-radius:999px;
+    white-space:nowrap;
+    transition:transform .15s ease, box-shadow .15s ease;
+    box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  }
+  .open-tab-btn:hover{transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,0.2);}
+
+  .wrap{max-width:1360px; margin:0 auto; padding:0 24px;}
+
+  /* ---------- STAGE : 70 / 30, map as large as possible ---------- */
+  .stage{display:flex; gap:20px; padding:22px 0 10px; align-items:stretch;}
+  .map-col{flex:0 0 70%; max-width:70%; min-width:0;}
+  .panel-col{flex:0 0 30%; max-width:30%; min-width:0; display:flex; flex-direction:column;}
+
+  .map-frame{
+    background:var(--surface); border:1px solid var(--hair); border-radius:18px;
+    padding:12px; height:100%;
+  }
+  .app-frame-bar{
+    display:flex; align-items:center; justify-content:space-between; padding:9px 10px 12px;
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--muted);
+  }
+  .dots{display:flex; gap:6px;}
+  .dots span{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  .dots span:nth-child(1){background:#E8746A;}
+  .dots span:nth-child(2){background:var(--amber);}
+  .dots span:nth-child(3){background:var(--green);}
+  .map-embed-wrap{width:100%; height:min(80vh, 780px); border-radius:12px; overflow:hidden; background:#DCE2E6;}
+  .map-embed-wrap iframe{width:100%; height:100%; border:0; display:block;}
+
+  /* ---------- TABS ---------- */
+  .tabbar{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;}
+  .tab-btn{
+    flex:1 1 auto; min-width:96px;
+    appearance:none; cursor:pointer; text-decoration:none; text-align:center;
+    font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:12.5px;
+    padding:11px 8px;
+    border-radius:16px 6px 16px 6px;
+    border:1.5px solid transparent;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .tab-btn:hover{transform:translateY(-1px);}
+
+  .tab-btn[data-tab="info"]{background:var(--blue-pale); color:var(--blue); border-color:#C7D6FA;}
+  .tab-btn[data-tab="landsat"]{background:var(--amber-pale); color:var(--amber); border-color:#F0DFAF;}
+  .tab-btn[data-tab="sentinel"]{background:var(--green-pale); color:var(--green); border-color:#BFE6CE;}
+  .tab-btn[data-tab="modis"]{background:var(--violet-pale); color:var(--violet); border-color:#D9CBFA;}
+
+  .tab-btn[data-tab="info"].active{background:var(--blue); color:#fff; border-radius:6px 16px 6px 16px; box-shadow:0 6px 14px rgba(61,111,224,.28);}
+  .tab-btn[data-tab="landsat"].active{background:var(--amber); color:#fff; border-radius:6px 16px 6px 16px; box-shadow:0 6px 14px rgba(201,138,22,.28);}
+  .tab-btn[data-tab="sentinel"].active{background:var(--green); color:#fff; border-radius:6px 16px 6px 16px; box-shadow:0 6px 14px rgba(35,135,84,.28);}
+  .tab-btn[data-tab="modis"].active{background:var(--violet); color:#fff; border-radius:6px 16px 6px 16px; box-shadow:0 6px 14px rgba(124,79,224,.28);}
+
+  .panel{
+    background:var(--surface); border:1px solid var(--hair); border-radius:6px 18px 6px 18px;
+    padding:20px 20px 22px; flex:1; overflow-y:auto; max-height:min(80vh, 780px);
+    border-top:3px solid var(--hair);
+  }
+  .panel[data-active="info"]{border-top-color:var(--blue);}
+  .panel[data-active="landsat"]{border-top-color:var(--amber);}
+  .panel[data-active="sentinel"]{border-top-color:var(--green);}
+  .panel[data-active="modis"]{border-top-color:var(--violet);}
+
+  .panel-section{display:none;}
+  .panel-section.active{display:block;}
+
+  .tag{font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; font-weight:600; margin-bottom:6px; display:inline-block;}
+  .tag.blue{color:var(--blue);} .tag.amber{color:var(--amber);} .tag.green{color:var(--green);} .tag.violet{color:var(--violet);}
+  .panel h3{font-family:'Space Grotesk', sans-serif; font-size:18px; margin:0 0 10px; line-height:1.25;}
+  .panel h4{font-family:'Space Grotesk', sans-serif; font-size:14.5px; margin:18px 0 8px; line-height:1.3;}
+  .panel p{font-size:13px; line-height:1.6; color:var(--muted); margin:0 0 14px;}
+  .panel p b{color:var(--ink);}
+
+  .divider{height:1px; background:var(--hair); margin:18px 0;}
+
+  .stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:14px 0 16px;}
+  .stat-card{background:var(--bg); border:1px solid var(--hair); border-radius:12px 5px 12px 5px; padding:10px 11px;}
+  .stat-card .k{font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:4px;}
+  .stat-card .v{font-family:'Space Grotesk', sans-serif; font-size:14px; font-weight:600; color:var(--ink);}
+
+  .band-row{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px;}
+  .band-chip{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600;
+    padding:6px 11px; border-radius:999px; border:1.5px solid;
+  }
+  .band-chip.blue{color:var(--blue); border-color:#C7D6FA; background:var(--blue-pale);}
+  .band-chip.amber{color:var(--amber); border-color:#F0DFAF; background:var(--amber-pale);}
+  .band-chip.green{color:var(--green); border-color:#BFE6CE; background:var(--green-pale);}
+  .band-chip.violet{color:var(--violet); border-color:#D9CBFA; background:var(--violet-pale);}
+
+  .checklist{list-style:none; margin:0 0 4px; padding:0;}
+  .checklist li{display:flex; gap:8px; align-items:flex-start; font-size:12.5px; line-height:1.55; color:var(--ink); margin-bottom:9px;}
+  .checklist li::before{content:"›"; font-weight:700; color:var(--blue); flex:0 0 auto;}
+
+  .mini-table{width:100%; border-collapse:collapse; font-size:11.5px; margin:0 0 6px;}
+  .mini-table th{
+    text-align:left; font-family:'IBM Plex Mono', monospace; font-size:9px; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--muted); font-weight:600; padding:0 6px 6px 0; border-bottom:1px solid var(--hair);
+  }
+  .mini-table td{padding:8px 6px 8px 0; border-bottom:1px solid var(--hair); color:var(--ink); vertical-align:top;}
+  .mini-table tr:last-child td{border-bottom:none;}
+
+  .credit-list{list-style:none; padding:0; margin:0 0 6px; font-size:12.5px;}
+  .credit-list li{padding:8px 0; border-bottom:1px solid var(--hair); color:var(--muted);}
+  .credit-list li:last-child{border-bottom:none;}
+  .credit-list a{color:var(--blue); text-decoration:none; border-bottom:1px solid transparent;}
+  .credit-list a:hover{border-color:var(--blue);}
+
+  /* ---------- footer ---------- */
+  footer{
+    max-width:1360px; margin:0 auto; padding:26px 24px 50px;
+    font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted);
+    text-align:center; border-top:1px solid var(--hair); margin-top:10px;
+  }
+  .repo-cta{
+    display:inline-flex; align-items:center; gap:8px;
+    font-size:12.5px; font-weight:600; text-decoration:none;
+    color:var(--blue); background:var(--blue-pale);
+    padding:10px 20px; border-radius:6px 16px 6px 16px; border:1.5px solid #C7D6FA;
+    margin-bottom:16px; transition:background .15s ease, color .15s ease;
+  }
+  .repo-cta:hover{background:var(--blue); color:#fff;}
+  footer .credit-line{margin-top:10px; color:var(--ink); font-weight:600;}
+
+  @media (max-width:920px){
+    .stage{flex-direction:column;}
+    .map-col,.panel-col{flex:1 1 auto; max-width:100%;}
+    .map-embed-wrap{height:420px;}
+    .panel{max-height:none;}
+    .hero-inner{flex-direction:column; align-items:flex-start;}
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="grid-overlay"></div>
+  <div class="scanlines"></div>
+  <div class="hero-inner">
+    <h1>Interactive Satellite Data Explorer</h1>
+    <a class="open-tab-btn" href="https://degrasskob.projects.earthengine.app/view/datasets" target="_blank" rel="noopener">Open in new tab ↗</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="stage">
+
+    <!-- MAP : 70%, as large as possible -->
+    <div class="map-col">
+      <div class="map-frame">
+        <div class="app-frame-bar">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span>degrasskob.projects.earthengine.app</span>
+        </div>
+        <div class="map-embed-wrap">
+          <iframe
+            src="https://degrasskob.projects.earthengine.app/view/datasets"
+            loading="lazy"
+            title="Interactive Satellite Data Explorer — Earth Engine App"
+            allowfullscreen>
+          </iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABS : 30% -->
+    <div class="panel-col">
+      <div class="tabbar">
+        <button class="tab-btn active" data-tab="info">Project Info</button>
+        <button class="tab-btn" data-tab="landsat">Landsat 9</button>
+        <button class="tab-btn" data-tab="sentinel">Sentinel-2</button>
+        <button class="tab-btn" data-tab="modis">MODIS</button>
+      </div>
+
+      <div class="panel" data-active="info">
+
+        <!-- PROJECT INFO (merged: about, AOI, datasets table, interpretation, credits) -->
+        <section class="panel-section active" id="info">
+          <span class="tag blue">Project info</span>
+          <h3>About this explorer</h3>
+          <p>This app overlays three satellite sensors — <b>Landsat 9</b>, <b>Sentinel-2</b>, and <b>MODIS</b> — on the same basin, so surface conditions can be compared across resolutions and revisit frequencies. Toggle layers inside the map to switch between true-colour composites and the MODIS NDVI time series.</p>
+
+          <span class="tag blue">How to use it</span>
+          <ul class="checklist">
+            <li>Toggle the layer checkboxes inside the map to switch between sensors.</li>
+            <li>Zoom into Pune city to compare Sentinel-2's fine detail against Landsat's broader view.</li>
+            <li>Use the MODIS NDVI layer to read basin-wide vegetation trends across the monsoon cycle.</li>
+            <li>Switch between the coloured tabs here for band and dataset details on each sensor.</li>
+          </ul>
+
+          <span class="tag blue">Area of interest</span>
+          <div class="stat-grid">
+            <div class="stat-card"><span class="k">River basin</span><span class="v">Mula-Mutha</span></div>
+            <div class="stat-card"><span class="k">City</span><span class="v">Pune, Maharashtra</span></div>
+            <div class="stat-card"><span class="k">Centroid latitude</span><span class="v">18.52° N</span></div>
+            <div class="stat-card"><span class="k">Centroid longitude</span><span class="v">73.86° E</span></div>
+            <div class="stat-card"><span class="k">Time window</span><span class="v">Jun 2024 – May 2025</span></div>
+          </div>
+
+          <div class="divider"></div>
+
+          <span class="tag blue">Datasets &amp; processing</span>
+          <table class="mini-table">
+            <tr><th>Dataset</th><th>Resolution</th><th>Processing</th></tr>
+            <tr>
+              <td><b>Landsat 9 SR</b><br>LANDSAT/LC09/C02/T1_L2</td>
+              <td>30 m</td>
+              <td>QA_PIXEL mask · scale 0.0000275, offset −0.2 · SR_B4/B3/B2, 0–0.3</td>
+            </tr>
+            <tr>
+              <td><b>Sentinel-2 SR</b><br>COPERNICUS/S2_SR_HARMONIZED</td>
+              <td>10–20 m</td>
+              <td>SCL mask · scale 0.0001 · B4/B3/B2, 0–0.3</td>
+            </tr>
+            <tr>
+              <td><b>MODIS Vegetation Indices</b><br>MODIS/061/MOD13Q1</td>
+              <td>250 m, 16-day</td>
+              <td>SummaryQA mask · NDVI scale 0.0001, 0–1</td>
+            </tr>
+          </table>
+
+          <div class="divider"></div>
+
+          <span class="tag blue">Interpretation</span>
+          <p>Sentinel-2's 10–20 m resolution resolves field boundaries, riverbanks, and built-up patches within Pune city, making it the most useful layer for spotting localized surface conditions relevant to flood-prone zones. Landsat 9, at 30 m, offers a coarser but historically consistent cross-check. MODIS NDVI, at 250 m and a 16-day revisit, is too coarse for parcel-level detail but well suited to tracking basin-wide vegetation response across the monsoon cycle — its time series shows a clear seasonal rise and fall through pre-monsoon, monsoon, and post-monsoon periods. Together, these products show how scale choice shapes what can and cannot be observed in flood hazard analysis.</p>
+
+          <div class="divider"></div>
+
+          <span class="tag blue">Credits &amp; sources</span>
+          <ul class="credit-list">
+            <li>Landsat 9 Collection 2 Level 2 — USGS / NASA. <a href="https://developers.google.com/earth-engine/datasets/catalog/LANDSAT_LC09_C02_T1_L2" target="_blank" rel="noopener">Catalogue entry ↗</a></li>
+            <li>Sentinel-2 SR Harmonized — ESA / Copernicus. <a href="https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED" target="_blank" rel="noopener">Catalogue entry ↗</a></li>
+            <li>MOD13Q1.061 Vegetation Indices — NASA LP DAAC / MODIS Terra. <a href="https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MOD13Q1" target="_blank" rel="noopener">Catalogue entry ↗</a></li>
+            <li>Processing and visualization: Google Earth Engine.</li>
+          </ul>
+        </section>
+
+        <!-- LANDSAT 9 -->
+        <section class="panel-section" id="landsat">
+          <span class="tag amber">Landsat 9</span>
+          <h3>USGS / NASA — 30 m, 16-day revisit</h3>
+          <p>Collection: <b>LANDSAT/LC09/C02/T1_L2</b>, Surface Reflectance Level-2. Cloud and shadow pixels are removed using the QA_PIXEL band before compositing.</p>
+          <div class="band-row">
+            <span class="band-chip amber">SR_B4 — Red</span>
+            <span class="band-chip amber">SR_B3 — Green</span>
+            <span class="band-chip amber">SR_B2 — Blue</span>
+          </div>
+          <p>Bands are scaled (×0.0000275, offset −0.2) and rendered as a true-colour composite, min 0 / max 0.3. Landsat's 30 m resolution and multi-decade archive make it a coarser but historically consistent cross-check against the finer Sentinel-2 layer — useful for confirming long-term surface trends rather than parcel-level detail.</p>
+        </section>
+
+        <!-- SENTINEL-2 -->
+        <section class="panel-section" id="sentinel">
+          <span class="tag green">Sentinel-2</span>
+          <h3>ESA / Copernicus — 10 m, 5-day revisit</h3>
+          <p>Collection: <b>COPERNICUS/S2_SR_HARMONIZED</b>, Surface Reflectance. The Scene Classification Layer (SCL) masks cloud and cloud-shadow pixels before compositing.</p>
+          <div class="band-row">
+            <span class="band-chip green">B4 — Red</span>
+            <span class="band-chip green">B3 — Green</span>
+            <span class="band-chip green">B2 — Blue</span>
+          </div>
+          <p>Bands are scaled (×0.0001) and rendered as a true-colour composite, min 0 / max 0.3. At 10 m, this is the sharpest layer in the app — sharp enough to resolve field boundaries, riverbanks, and individual built-up patches across Pune, making it the most useful layer for spotting localized surface conditions.</p>
+        </section>
+
+        <!-- MODIS -->
+        <section class="panel-section" id="modis">
+          <span class="tag violet">MODIS</span>
+          <h3>NASA Terra — 250 m, 16-day composite</h3>
+          <p>Collection: <b>MODIS/061/MOD13Q1</b>, Vegetation Indices. Pixels are filtered using the SummaryQA band, keeping only good and marginal quality retrievals.</p>
+          <div class="band-row">
+            <span class="band-chip violet">NDVI</span>
+          </div>
+          <p>NDVI is scaled (×0.0001) and rendered on a red-to-green palette, min 0 / max 1. Far too coarse for parcel-level reading, MODIS instead tracks basin-wide vegetation response over time — the NDVI series shows a clear seasonal rise and fall through the pre-monsoon, monsoon, and post-monsoon periods.</p>
+        </section>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <a class="repo-cta" href="https://github.com/Smiley1Go/Hyderabad.LULC.Classification/tree/Exercise_2" target="_blank" rel="noopener">View repository ↗</a>
+  <div>Data: USGS Landsat 9 · ESA Copernicus Sentinel-2 · NASA MODIS — via Google Earth Engine</div>
+  <div class="credit-line">Designed &amp; developed by Joshby Joshy, for the Geospatial Big Data Analysis coursework.</div>
+</footer>
+
+<script>
+  var tabButtons = document.querySelectorAll('.tab-btn[data-tab]');
+  var panel = document.querySelector('.panel');
+  tabButtons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      tabButtons.forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.panel-section').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      var id = btn.dataset.tab;
+      document.getElementById(id).classList.add('active');
+      panel.setAttribute('data-active', id);
+    });
+  });
+</script>
+
+</body>
+</html>
