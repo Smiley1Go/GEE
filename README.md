@@ -6,7 +6,7 @@ An interactive web app comparing three satellite sensors — **Landsat 9**, **Se
 
 - **GEE App**: [Datasets](https://degrasskob.projects.earthengine.app/view/datasets)
 - **GitHub Repository**: [Smiley1Go/GEE at Exercise_2](https://github.com/Smiley1Go/GEE/tree/Exercise_2)
-- **GitHub Pages**: [Datasets.html](https://smiley1go.github.io/Works_GEE/Datasets.html)
+- **GitHub Pages**: [Datasets.html](https://smiley1go.github.io/GEE/Datasets.html)
 
 ## Overview
 
